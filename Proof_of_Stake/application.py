@@ -270,9 +270,6 @@ def new_block():
             validator.age = int(time_now - validator.creation_time)
             blockchain.create_block(block_bpm, plc_data, validator)
             
-        for block in blockchain.temporaryBlocks:
-            print(block.to_string())
-            
         winner_block = blockchain.proof_of_stake()
         bloco = winner_block.to_list()
         blockchain.mass_removal()
