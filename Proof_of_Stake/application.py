@@ -106,12 +106,8 @@ class Blockchain:
         
         while current_block < len(chain):
             block = chain[current_block]
-            if previous_block.compute_hash() == '0':
-                print('Cheguei no genesis')
-                return True
+            
             if block.get_previous_hash() != previous_block.compute_hash():
-                print(block.get_previous_hash())
-                print(previous_block.compute_hash())
                 return False
             
             previous_block = block
