@@ -1,11 +1,13 @@
 import time
 import datetime
 import json
+from threading import Thread
 from hashlib import sha256
 from flask import Flask, render_template, request
 from random import randint, random
 
 my_ip = '127.0.0.1'
+background_timer = 30
 
 class Block:
     def __init__(self, index, bpm, timestamp, previous_hash, plc_data, validator):
@@ -194,6 +196,26 @@ def plc_data_generator():
         data += str(randint(0,1))
     return data    
 
+def background():
+    ''' creating a new block in the background every 30 seconds'''
+    
+    current_time = time.time()
+    while True:
+        new_time = time.time()
+
+        if new_time - current_time >= background_timer:
+            block_bpm = randint(10,50)
+            plc_data = plc_data_generator()
+            
+            for validator in blockchain.validators:
+                time_now = time.time()
+                validator.age = int(time_now - validator.creation_time)
+                blockchain.create_block(block_bpm, plc_data, validator)
+                
+            blockchain.proof_of_stake()
+            current_time = new_time
+
+            
 val1 = Validator('1213', 1, 1)
 val2 = Validator('1235', 1, 1)
 val3 = Validator('1361', 1, 1)
@@ -281,5 +303,8 @@ def remove_validator():
         return render_template('remove validator.html')
     return render_template('remove validator.html')
 
+
+thread = Thread(target = background)
+thread.start()
 
 app.run(host=my_ip, port=5000)
