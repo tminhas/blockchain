@@ -5,6 +5,7 @@ from hashlib import sha256
 from flask import Flask, render_template, request
 from random import randint, random
 
+my_ip = '127.0.0.1'
 
 class Block:
     def __init__(self, index, bpm, timestamp, previous_hash, plc_data, validator):
@@ -157,9 +158,6 @@ class Blockchain:
                 winnerPool.append(validator)
                 totalTokens += validator.tokens
         
-        if winnerPool == []:
-            raise ValueError('No validators with stake in the network')
-        
         winnerNumber = randint(0, int(totalTokens))
         temp = 0
         
@@ -284,4 +282,4 @@ def remove_validator():
     return render_template('remove validator.html')
 
 
-app.run(host='127.0.0.1', port=5000)
+app.run(host=my_ip, port=5000)
