@@ -7,6 +7,7 @@ from random import randint
 
 # amount of zeros in the beggining of the hash
 zeros_in_hash = 5
+my_ip = '127.0.0.1'
 
 class Block:
     def __init__(self, index, nounce, timestamp, previous_hash, plc_data):
@@ -150,4 +151,4 @@ def display_chain():
         
     return render_template('display chain.html', blocks = blocks, headings=headings)
 
-app.run(host='127.0.0.1', port=5000)
+app.run(host=my_ip, port=5000)
