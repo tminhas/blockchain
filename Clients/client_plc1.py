@@ -23,10 +23,10 @@ while True:
                    'Distributing.GV_Estacao_Seguinte_Livre_1','Distributing.GV_B_Start_1','Distributing.GV_B_Stop_1',
                    'Distributing.GV_Manual_Mode_1', 'Distributing.GV_B_Reset_1')
     out = opc.read('Distributing.GV_Empurra_Peca_1', 'Distributing.GV_Liga_Vacuo_1', 'Distributing.GV_Liga_Sopro_1', 
-                   'Distributing.GV_Rotativo_Pega_Peca_1', 'Distributing.GV_Rotativo_Solta_Peca_1', 'Distributing.PLC_1__Distributing_LED_Start'
+                   'Distributing.GV_Rotativo_Pega_Peca_1', 'Distributing.GV_Rotativo_Solta_Peca_1', 'Distributing.PLC_1__Distributing_LED_Start',
                    'Distributing.PLC_1__Distributing_LED_reset', 'Distributing.GV_Running_Reset_1', 'Distributing.GV_Running_System_1')
     
-    inputs = [int(input[0]) for input in inp]
+    inputs = [int(inpu[0]) for inpu in inp]
     outputs = [int(output[0]) for output in out]
     # Combine the input and output values into a single list
     data = {'inputs': inputs, 'outputs': outputs}
