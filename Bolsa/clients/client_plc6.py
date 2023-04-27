@@ -28,7 +28,7 @@ while True:
                    'Sorting.GV_LUZ_Q6_6','Sorting.GV_Prata_6','Sorting.GV_Vermelho_6',
                    'Sorting.GV_Preto_6')
     
-    inputs = [int(input[0]) for input in inp]
+    inputs = [int(inpu[0]) for inpu in inp]
     outputs = [int(output[0]) for output in out]
     # Combine the input and output values into a single list
     data = {'inputs': inputs, 'outputs': outputs}
