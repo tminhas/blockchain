@@ -1,0 +1,37 @@
+<link rel="stylesheet" href="/static/styles.css" />
+
+<body>
+
+    <h2 class="title">Available actions</h2>
+
+    <div class="flex-parent jc-center">
+
+        <form action="/display_chain">
+            <button class="button-1" type="submit">Display chain</button>
+        </form>
+
+        <form action="/simulate_attack">
+            <button class="button-1" type="submit">Simulate an attack</button>
+        </form>
+
+        <form action="/check_validation">
+            <button class="button-1" type="submit">Check if the chain is valid</button>
+        </form>
+
+        <form action="/current_validators">
+            <button class="button-1" type="submit">Current validators</button>
+        </form>
+
+    </div>
+    
+    <h2 class="title">An attack was simulated:</h2>
+
+    <h3 class="title">Data before the attack</h2>
+    <h4 class="title">{{previous_data}}</h2>
+
+    <h3 class="title">Data after the attack</h2>
+    <h4 class="title">{{new_data}}</h2>
+
+    
+
+</body>
