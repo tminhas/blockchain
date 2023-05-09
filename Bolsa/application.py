@@ -244,7 +244,14 @@ class Blockchain:
 
         self.repository.append([blocks])
         return self.repository
-            
+    
+    def simulate_attack(self):
+        target = randint(0, len(self.chain)-1)
+        previous_data = self.chain[target].plc_data
+        new_data = [1,1,1,1,1,1,1,1,1]
+        self.chain[target].plc_data= new_data
+        
+        return target, previous_data, new_data
         
 def background():
     ''' creating a new block in the background every 30 seconds'''
@@ -383,6 +390,23 @@ def display_boxes():
 
     return render_template('display chain.html', boxes = boxes, headings = headings)
 
+
+@app.route('/simulate_attack', methods=['GET'])
+def simulate_attack():
+    attack = blockchain.simulate_attack()
+    
+    target = attack[0]
+    previous_data = attack[1]
+    new_data = attack[2]
+    
+    return render_template('simulate attack.html', target=target, previous_data=previous_data, new_data=new_data)
+
+
+@app.route('/check_validation', methods=['GET'])
+def checks_if_valid():
+    status = blockchain.check_if_valid(blockchain.chain)
+    
+    return render_template('check validation.html', status=status)
 
 thread = Thread(target = background)
 thread2 = Thread(target = background_2)
