@@ -6,7 +6,7 @@ from hashlib import sha256
 from flask import Flask, render_template, request
 from random import randint, random
 
-my_ip = "150.162.14.130"
+my_ip = "192.168.1.5"
 # tempo para criação de um bloco caso não tenham mudanças
 background_timer1 = 30
 # tempo para armazenar 5 blocos via proof of work
@@ -16,10 +16,11 @@ plc_data = dict()
 zeros_in_hash = 5
 
 class Box:
-    def __init__(self, blks, previous_hash, nounce):
+    def __init__(self, blks, previous_hash, nounce, timestamp):
         self.blks = blks
         self.previous_hash = previous_hash
         self.nounce = nounce
+        self.timestamp = timestamp
         
     def get_previous_hash(self):
         return self.previous_hash
@@ -30,11 +31,19 @@ class Box:
     def compute_hash(self):
         """ json dumps converts python object to a json string,
         using a dictionary to export the encoded data"""
-        self_str = json.dumps(self.__dict__, sort_keys=True)
+        self_str = self.to_string()
         return sha256(self_str.encode()).hexdigest()
     
     def to_list(self):
-        return [self.blks[0], self.blks[1], self.blks[2], self.blks[3], self.blks[4], self.previous_hash, self.nounce]
+        print(self.blks)
+        return [self.blks[0].get_index(), self.blks[-1].get_index(), self.previous_hash, self.nounce, self.timestamp]
+    
+    def to_string(self):
+        self_str = ""
+        for blocks in self.blks:
+            self_str += blocks.to_string()
+        self_str += str(self.previous_hash) +" "+str(self.nounce)
+        return self_str 
 
 class Block:
     def __init__(self, index, bpm, timestamp, previous_hash, plc_data, validator):
@@ -92,15 +101,19 @@ class Blockchain:
 
     def __init__(self):
         self.chain = []
+        self.repository = []
         self.start_genesis_block()
         self.start_genesis_box()
         self.index = 0
         self.validators = set()
         self.temporaryBlocks = []
-        self.repository = []
 
     def start_genesis_box(self):
-        genesis_box =  Box(Block(0, 1, str(datetime.datetime.now().replace(microsecond=0)), '0', '0'*32, Validator(1, 1, 1)), 0, 1)
+        genesis_box =  Box([Block(0, 1, str(datetime.datetime.now().replace(microsecond=0)), '0', '0'*32, Validator(1, 1, 1)),
+                           Block(0, 1, str(datetime.datetime.now().replace(microsecond=0)), '0', '0'*32, Validator(1, 1, 1)),
+                           Block(0, 1, str(datetime.datetime.now().replace(microsecond=0)), '0', '0'*32, Validator(1, 1, 1)),
+                           Block(0, 1, str(datetime.datetime.now().replace(microsecond=0)), '0', '0'*32, Validator(1, 1, 1)),
+                           Block(0, 1, str(datetime.datetime.now().replace(microsecond=0)), '0', '0'*32, Validator(1, 1, 1))], 0, 1, str(datetime.datetime.now().replace(microsecond=0)))
         self.repository.append(genesis_box)
         return genesis_box
     
@@ -209,6 +222,7 @@ class Blockchain:
         Selects a validator as a winner, then adds the block to the blockchain
         giving the validator a portion of the bpm
         """   
+        chosen_block = None
         chosen_validator = self.select_winner()
         while chosen_validator == None:
             chosen_validator = self.select_winner()
@@ -223,10 +237,10 @@ class Blockchain:
         self.add_blocks(chosen_block)
         return chosen_block
     
-    def compute_hash(self, blocks, nounce):
-        for block in blocks:
+    def compute_hash(self):
+        for block in self.blocks:
             block_string += block.to_string()
-        block_string += nounce
+        block_string += self.nounce
         return sha256(block_string.encode()).hexdigest()
     
     def proof_of_work(self):
@@ -234,19 +248,23 @@ class Blockchain:
         nounce = 1
         check_nounce = False
         previous_hash = self.repository[-1].compute_hash()
+        current_size = len(self.chain)
         while check_nounce is False:
-            caixa = Box(blocks, previous_hash, nounce)
-            hash_operation = caixa.compute_hash(blocks, nounce)
+            caixa = Box(blocks, previous_hash, nounce, str(datetime.datetime.now().replace(microsecond=0)))
+            hash_operation = caixa.compute_hash()
             if hash_operation[:zeros_in_hash] == '0'*zeros_in_hash:
                 check_nounce = True
             else:
-                nounce += 1
+                nounce = randint(2, 10**10)
 
-        self.repository.append([blocks])
+            if len(self.chain) > current_size:
+                break
+
+        self.repository.append(caixa)
         return self.repository
-    
+            
     def simulate_attack(self):
-        target = randint(0, len(self.chain)-1)
+        target = randint(1, len(self.chain)-1)
         previous_data = self.chain[target].plc_data
         new_data = [1,1,1,1,1,1,1,1,1]
         self.chain[target].plc_data= new_data
@@ -273,13 +291,13 @@ def background():
 
     
 def background_2():
-    current_time = time.time()
+    #current_time = time.time()
     while True:
-        new_time = time.time()
-        if (new_time - current_time >= 300): 
+        #new_time = time.time()
+        #if (new_time - current_time >= 300): 
             
-            blockchain.proof_of_work()
-            current_time = new_time
+        blockchain.proof_of_work()
+            #current_time = new_time
         
          
 def convert_dict_to_str(plc_dict):
@@ -382,14 +400,13 @@ def receive_data():
 @app.route('/display_boxes', methods=['GET'])
 def display_boxes():
     
-    headings = ("Block1", "Block2", "Block3", "Block4", "Block5", "Previous Hash", "Nounce",)
+    headings = ("First Block","Last Block", "Previous Hash", "Nounce", "Timestamp")
     boxes = []
     
     for box in reversed(blockchain.repository):
         boxes.append(box.to_list())
 
-    return render_template('display chain.html', boxes = boxes, headings = headings)
-
+    return render_template('display boxes.html', boxes = boxes, headings = headings)
 
 @app.route('/simulate_attack', methods=['GET'])
 def simulate_attack():
@@ -408,11 +425,11 @@ def checks_if_valid():
     
     return render_template('check validation.html', status=status)
 
+
 thread = Thread(target = background)
 thread2 = Thread(target = background_2)
 thread.start()
 thread2.start()
 
 app.run(host=my_ip, port=5000, threaded=True)
-
 
