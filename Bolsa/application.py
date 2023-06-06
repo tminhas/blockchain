@@ -5,15 +5,22 @@ from threading import Thread
 from hashlib import sha256
 from flask import Flask, render_template, request
 from random import randint, random
+from flask_sqlalchemy import SQLAlchemy
+
+
 
 my_ip = "192.168.1.5"
 # tempo para criação de um bloco caso não tenham mudanças
 background_timer1 = 30
-# tempo para armazenar 5 blocos via proof of work
-background_timer2 = 300
 global plc_data
 plc_data = dict()
 zeros_in_hash = 5
+
+# configs para banco de dados
+ap = Flask(__name__)
+#app.config['SECRET_KEY'] ='aaaaaaaaa'
+ap.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
+db = SQLAlchemy(ap)
 
 class Box:
     def __init__(self, blks, previous_hash, nounce, timestamp):
@@ -45,7 +52,17 @@ class Box:
         self_str += str(self.previous_hash) +" "+str(self.nounce)
         return self_str 
 
-class Block:
+class Block(db.Model):
+    __tablename__ = 'blocks'
+    id = db.Column(db.Integer, primary_key=True)
+    index = db.Column(db.Integer)
+    bpm = db.Column(db.Integer)
+    timestamp = db.Column(db.DateTime)
+    previous_hash = db.Column(db.String(64))
+    plc_data = db.Column(db.String(255))
+    validator_id = db.Column(db.Integer, db.ForeignKey('validators.id'))
+    validator = db.relationship('Validator', backref=db.backref('blocks'))
+    
     def __init__(self, index, bpm, timestamp, previous_hash, plc_data, validator):
         self.index = index
         self.bpm = bpm
@@ -87,7 +104,11 @@ class Block:
     def to_list(self):
         return [self.index, self.bpm, self.timestamp, self.previous_hash, self.plc_data, int(self.validator.to_list()[0])]
 
-class Validator:
+class Validator(db.Model):
+    __tablename__ = 'validators'
+    id = db.Column(db.Integer, primary_key=True)
+    tokens = db.Column(db.Integer)
+    age = db.Column(db.Integer)
     def __init__(self, id, tokens, age):
         self.creation_time = time.time()
         self.id = id
@@ -138,6 +159,8 @@ class Blockchain:
         """
         self.temporaryBlocks = []
         self.index += 1
+        db.session.add(block)
+        db.session.commit()
         return self.chain.append(block)
         
     def last_block(self):
@@ -177,6 +200,8 @@ class Blockchain:
         Creates a new validator for the blockchain
         """
         self.validators.add(validator)
+        db.session.add(validator)
+        db.session.commit()
         return self.validators
     
     def remove_validator(self, validator_id):
@@ -431,5 +456,12 @@ thread2 = Thread(target = background_2)
 thread.start()
 thread2.start()
 
-app.run(host=my_ip, port=5000, threaded=True)
+
+if __name__ == '__main__':
+    # Garanta que as tabelas sejam criadas somente quando o arquivo for executado diretamente
+    with ap.app_context():
+        db.create_all()
+    app.run(host=my_ip, port=5000, threaded=True)
+
+
 
