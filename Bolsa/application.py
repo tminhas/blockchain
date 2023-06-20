@@ -18,7 +18,6 @@ zeros_in_hash = 5
 
 # configs para banco de dados
 app = Flask(__name__)
-#app.config['SECRET_KEY'] ='aaaaaaaaa'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
