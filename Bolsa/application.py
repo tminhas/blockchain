@@ -6,7 +6,7 @@ from hashlib import sha256
 from flask import Flask, render_template, request
 from random import randint, random
 from flask_sqlalchemy import SQLAlchemy
-
+from sqlalchemy.orm import sessionmaker
 
 
 my_ip = "192.168.1.5"
@@ -17,11 +17,19 @@ plc_data = dict()
 zeros_in_hash = 5
 
 # configs para banco de dados
-ap = Flask(__name__)
+app = Flask(__name__)
 #app.config['SECRET_KEY'] ='aaaaaaaaa'
-ap.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
-db = SQLAlchemy(ap)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
+def create_session():
+    with app.app_context():
+        Session = sessionmaker(bind=db.engine)
+        session = Session()
+        return session
+
+session = create_session()
 class Box:
     def __init__(self, blks, previous_hash, nounce, timestamp):
         self.blks = blks
@@ -55,16 +63,14 @@ class Box:
 class Block(db.Model):
     __tablename__ = 'blocks'
     id = db.Column(db.Integer, primary_key=True)
-    index = db.Column(db.Integer)
+    indx = db.Column(db.Integer)
     bpm = db.Column(db.Integer)
     timestamp = db.Column(db.DateTime)
     previous_hash = db.Column(db.String(64))
     plc_data = db.Column(db.String(255))
-    validator_id = db.Column(db.Integer, db.ForeignKey('validators.id'))
-    validator = db.relationship('Validator', backref=db.backref('blocks'))
-    
-    def __init__(self, index, bpm, timestamp, previous_hash, plc_data, validator):
-        self.index = index
+
+    def __init__(self, indx, bpm, timestamp, previous_hash, plc_data, validator):
+        self.indx = indx
         self.bpm = bpm
         self.timestamp = timestamp
         self.previous_hash = previous_hash
@@ -72,7 +78,7 @@ class Block(db.Model):
         self.validator = validator
 
     def get_index(self):
-        return self.index
+        return self.indx
     
     def get_bpm(self):
         return self.bpm
@@ -92,31 +98,40 @@ class Block(db.Model):
     def compute_hash(self):
         """ json dumps converts python object to a json string,
         using a dictionary to export the encoded data"""
-        original_validator = self.validator
-        self.validator = self.validator.to_list()[0]
-        block_string = json.dumps(self.__dict__, sort_keys=True)
-        self.validator = original_validator
+        block_string = self.to_string()
         return sha256(block_string.encode()).hexdigest()
     
     def to_string(self):
-        return 'Index: '+ str(self.get_index())+', BPM: '+ str(self.get_bpm()) + ", Previous Hash: " + str(self.get_previous_hash()) + ", Plc Data: " + str(self.get_plc_data())+", Validator: "+ str(self.get_validator().to_list()) +", Timestamp: " + str(self.get_timestamp())
+        validator_dict = self.validator.to_dict()
+        block_dict = {
+            'index': self.indx,
+            'timestamp': str(self.timestamp),
+            'bpm': self.bpm,
+            'previous_hash': self.previous_hash,
+            'plc_data': self.plc_data,
+            'validator': validator_dict,
+        }
+        return json.dumps(block_dict, sort_keys=True)
+    
     
     def to_list(self):
-        return [self.index, self.bpm, self.timestamp, self.previous_hash, self.plc_data, int(self.validator.to_list()[0])]
+        return [self.indx, self.bpm, self.timestamp, self.previous_hash, self.plc_data, int(self.validator.to_list()[0])]
 
-class Validator(db.Model):
-    __tablename__ = 'validators'
-    id = db.Column(db.Integer, primary_key=True)
-    tokens = db.Column(db.Integer)
-    age = db.Column(db.Integer)
-    def __init__(self, id, tokens, age):
+class Validator():
+    def __init__(self, ip, tokens, age):
         self.creation_time = time.time()
-        self.id = id
+        self.ip = ip
         self.tokens = tokens
         self.age = age
         
+    def to_dict(self):
+        return {'ip': self.ip, 'tokens': self.tokens, 'age': self.age}
+    
+    def to_string(self):
+        return json.dumps(self.to_dict())
+    
     def to_list(self):
-        return [self.id, self.tokens, self.age]
+        return [self.ip, self.tokens, self.age]
 
 class Blockchain:
 
@@ -140,16 +155,16 @@ class Blockchain:
     
     def start_genesis_block(self):
         """ initial blockchain block, with an index and a previous hash of 0"""
-        genesis_block = Block(0, 1, str(datetime.datetime.now().replace(microsecond=0)), '0', '0'*32, Validator(1, 1, 1))
+        genesis_block = Block(0, 1, datetime.datetime.now().replace(microsecond=0), '0', '0'*32, Validator(1, 1, 1))
         self.chain.append(genesis_block) 
         return genesis_block
     
-    def create_block(self, bpm, plc_data, validator):
+    def create_block(self, bpm, plc_data, validator, session):
         """
         Creates a temporary block to be validated
         """
         previous_hash = self.chain[-1].compute_hash()
-        block = Block(self.index +1, bpm, str(datetime.datetime.now().replace(microsecond=0)), previous_hash , plc_data, validator)
+        block = Block(self.index +1, bpm, datetime.datetime.now(), previous_hash , plc_data, validator)
         self.temporaryBlocks.append(block)
         return block
     
@@ -159,8 +174,10 @@ class Blockchain:
         """
         self.temporaryBlocks = []
         self.index += 1
-        db.session.add(block)
-        db.session.commit()
+        with app.app_context():
+            session.add(block)
+            session.commit()
+            session.refresh(block)
         return self.chain.append(block)
         
     def last_block(self):
@@ -200,8 +217,6 @@ class Blockchain:
         Creates a new validator for the blockchain
         """
         self.validators.add(validator)
-        db.session.add(validator)
-        db.session.commit()
         return self.validators
     
     def remove_validator(self, validator_id):
@@ -254,13 +269,14 @@ class Blockchain:
         
         for block in self.temporaryBlocks:
             validator = block.get_validator()
-            if validator.id == chosen_validator.id:
+            if validator.ip == chosen_validator.ip:
                 chosen_block = block
                 validator.tokens += chosen_block.bpm/50
-                break
-
+                break   
+            
         self.add_blocks(chosen_block)
         return chosen_block
+
     
     def compute_hash(self):
         for block in self.blocks:
@@ -309,7 +325,8 @@ def background():
             for validator in blockchain.validators:
                 time_now = time.time()
                 validator.age = int(time_now - validator.creation_time)
-                blockchain.create_block(block_bpm, plc_str, validator)
+                session = create_session()
+                blockchain.create_block(block_bpm, plc_str, validator, session)
                 
             blockchain.proof_of_stake()
             current_time = new_time
@@ -336,7 +353,8 @@ def convert_dict_to_str(plc_dict):
     return plc_str
 
 def check_plc_data(data_plc):
-    last_data = blockchain.chain[-1].get_plc_data()
+    last_block = session.query(Block).order_by(Block.indx.desc()).first()
+    last_data = last_block.get_plc_data()
     if data_plc == "":
         return False
     if data_plc == last_data:
@@ -346,7 +364,7 @@ def check_plc_data(data_plc):
 
 blockchain = Blockchain()
 
-app = Flask(__name__)
+#app = Flask(__name__)
 
 # Homepage
 @app.route('/')
@@ -371,10 +389,10 @@ def display_chain():
 @app.route('/new_validator', methods=['GET', 'POST'])
 def new_validator():
     if request.method == 'POST':
-        id = request.form["id"]
+        ip = request.form["ip"]
         tokens = request.form["tokens"]
         
-        new_validator = Validator(str(id), int(tokens), 1)
+        new_validator = Validator(str(ip), int(tokens), 1)
         blockchain.add_validator(new_validator)
         
         return render_template("new validator.html")
@@ -396,8 +414,8 @@ def current_validators():
 @app.route('/remove_validator', methods=['GET', 'POST'])
 def remove_validator():
     if request.method == 'POST':
-        id = request.form['id']
-        blockchain.remove_validator(id)
+        ip = request.form['ip']
+        blockchain.remove_validator(ip)
         
         return render_template('remove validator.html')
     return render_template('remove validator.html')
@@ -459,9 +477,7 @@ thread2.start()
 
 if __name__ == '__main__':
     # Garanta que as tabelas sejam criadas somente quando o arquivo for executado diretamente
-    with ap.app_context():
+    with app.app_context():
         db.create_all()
+        db.session.commit()
     app.run(host=my_ip, port=5000, threaded=True)
-
-
-
