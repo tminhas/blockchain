@@ -1,17 +1,27 @@
 import sqlite3
 
-# Conecte-se ao banco de dados (criará um novo arquivo se não existir)
-conn = sqlite3.connect('db.sqlite')
+# Connect to the database
+conn = sqlite3.connect('instance\db.sqlite')
 
-# Crie um cursor para executar comandos SQL
+# Create a cursor object to execute SQL queries
 cursor = conn.cursor()
 
-# Crie uma tabela chamada 'usuarios'
-cursor.execute('''CREATE TABLE usuarios
-                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                   nome TEXT NOT NULL,
-                   idade INTEGER NOT NULL)''')
+# SQL statement to create the table
+create_table_query = '''
+CREATE TABLE IF NOT EXISTS blocks (
+    id INTEGER PRIMARY KEY,
+    indx INTEGER,
+    bpm INTEGER,
+    timestamp DATETIME,
+    previous_hash TEXT,
+    plc_data TEXT
+);
+'''
 
-# Salve as alterações e feche a conexão com o banco de dados
+# Execute the create table query
+cursor.execute(create_table_query)
+# Commit the changes to the database
 conn.commit()
+
+# Close the database connection
 conn.close()
