@@ -7,7 +7,9 @@ from flask import Flask, render_template, request
 from random import randint, random
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import sessionmaker
-
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.backends import default_backend
 
 my_ip = "192.168.1.5"
 # tempo para criação de um bloco caso não tenham mudanças
@@ -270,7 +272,7 @@ class Blockchain:
             validator = block.get_validator()
             if validator.ip == chosen_validator.ip:
                 chosen_block = block
-                validator.tokens += chosen_block.bpm/50
+                validator.tokens += 1
                 break   
             
         self.add_blocks(chosen_block)
@@ -422,21 +424,46 @@ def remove_validator():
 @app.route('/data', methods=['POST'])
 def receive_data():
     # Extract the data and source IP from the request
-    data = request.get_json()
+    payload = request.get_json()
+    data = payload['data']
+    signature = payload['signature']
     source_ip = request.remote_addr
-    
-     # If we haven't received data from this source before, create a new list
-    if source_ip not in plc_data:
-        ip = source_ip.replace('.', '')
-        blockchain.add_validator(Validator(ip, 1, 1))
-        plc_data[source_ip] = ""
-    
-    # Add the data to the list of PLC data for this source
-    plc_data[source_ip] = data
-    print(plc_data)
-    
-    # Return a response to indicate success
-    return {'status': 'success'}
+
+    # Load the server's public key for signature verification
+    with open('public_key.pem', 'rb') as key_file:
+        public_key = serialization.load_pem_public_key(
+            key_file.read(),
+            backend=default_backend()
+        )
+
+    try:
+        # Verify the signature using the client's public key
+        public_key.verify(
+            signature,
+            data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        # Signature verification successful
+
+        # If we haven't received data from this source before, create a new list
+        if source_ip not in plc_data:
+            ip = source_ip.replace('.', '')
+            blockchain.add_validator(Validator(ip, 1, 1))
+            plc_data[source_ip] = ""
+
+        # Add the data to the list of PLC data for this source
+        plc_data[source_ip] = data
+        print(plc_data)
+
+        # Return a response to indicate success
+        return {'status': 'success'}
+    except:
+        # Signature verification failed
+        return {'status': 'error', 'message': 'Signature verification failed'}
 
 
 @app.route('/display_boxes', methods=['GET'])
@@ -480,3 +507,5 @@ if __name__ == '__main__':
         db.create_all()
         db.session.commit()
     app.run(host=my_ip, port=5000, threaded=True)
+
+
