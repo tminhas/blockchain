@@ -1,6 +1,8 @@
 import time
 import datetime
 import json
+import base64
+import ast
 from threading import Thread
 from hashlib import sha256
 from flask import Flask, render_template, request
@@ -11,7 +13,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 
-my_ip = "192.168.1.5"
+my_ip = "192.168.1.9"
 # tempo para criação de um bloco caso não tenham mudanças
 background_timer1 = 30
 global plc_data
@@ -425,29 +427,53 @@ def remove_validator():
 def receive_data():
     # Extract the data and source IP from the request
     payload = request.get_json()
-    data = payload['data']
-    signature = payload['signature']
+    encrypted_data_str = payload['data']
+    signature_str = payload['signature']
     source_ip = request.remote_addr
 
-    # Load the server's public key for signature verification
-    with open('public_key.pem', 'rb') as key_file:
-        public_key = serialization.load_pem_public_key(
+    # Load the server's private key for decryption
+    with open('private_key.pem', 'rb') as key_file:
+        private_key = serialization.load_pem_private_key(
             key_file.read(),
+            password=None,
             backend=default_backend()
         )
 
+    # Convert base64-encoded strings to bytes
+    encrypted_data = base64.b64decode(encrypted_data_str.encode('utf-8'))
+    signature = base64.b64decode(signature_str.encode('utf-8'))
+    
     try:
         # Verify the signature using the client's public key
-        public_key.verify(
-            signature,
-            data,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
+        with open('client_public_key.pem', 'rb') as key_file:
+            client_public_key = serialization.load_pem_public_key(
+                key_file.read(),
+                backend=default_backend()
+            )
+            client_public_key.verify(
+                signature,
+                encrypted_data,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            # Signature verification successful
+
+        # Decrypt the data using the server's private key
+        decrypted_data = private_key.decrypt(
+            encrypted_data,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
         )
-        # Signature verification successful
+
+        # Convert the decrypted data to a dictionary
+        data = ast.literal_eval(decrypted_data.decode('utf-8'))
+        print(data)
 
         # If we haven't received data from this source before, create a new list
         if source_ip not in plc_data:
@@ -462,9 +488,8 @@ def receive_data():
         # Return a response to indicate success
         return {'status': 'success'}
     except:
-        # Signature verification failed
-        return {'status': 'error', 'message': 'Signature verification failed'}
-
+        # Signature verification or decryption failed
+        return {'status': 'error', 'message': 'Signature verification or decryption failed'}
 
 @app.route('/display_boxes', methods=['GET'])
 def display_boxes():
@@ -507,5 +532,6 @@ if __name__ == '__main__':
         db.create_all()
         db.session.commit()
     app.run(host=my_ip, port=5000, threaded=True)
+
 
 
