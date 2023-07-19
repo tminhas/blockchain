@@ -1,25 +1,26 @@
 import requests
 import time
 import random
+import base64
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 
 # Define the URL of the blockchain server
-url = 'http://192.168.1.5:5000/data'
+url = 'http://192.168.1.9:5000/data'
 
-# Load the server's private key for signing
-with open('private_key.pem', 'rb') as key_file:
-    private_key = serialization.load_pem_private_key(
-        key_file.read(),
-        password=None,
-        backend=default_backend()
-    )
-
-# Load the client's public key for encryption
+# Load the server's public key for encryption
 with open('public_key.pem', 'rb') as key_file:
     public_key = serialization.load_pem_public_key(
         key_file.read(),
+        backend=default_backend()
+    )
+
+# Load the client's private key for signature
+with open('client_private_key.pem', 'rb') as key_file:
+    private_key = serialization.load_pem_private_key(
+        key_file.read(),
+        password=None,
         backend=default_backend()
     )
 
@@ -55,11 +56,15 @@ while True:
         ),
         hashes.SHA256()
     )
+    
+    # Convert bytes to base64-encoded strings
+    encrypted_data_str = base64.b64encode(encrypted_data).decode('utf-8')
+    signature_str = base64.b64encode(signature).decode('utf-8')
 
     # Prepare the payload with the encrypted data and signature
     payload = {
-        'data': encrypted_data,
-        'signature': signature
+        'data': encrypted_data_str,
+        'signature': signature_str
     }
 
     # Send the payload to the blockchain server
