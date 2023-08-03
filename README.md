@@ -11,9 +11,11 @@ It showcases the fundamental concepts of blockchain technology, including proof 
 
 ## Features
 
-- Proof of Work (PoW): Demonstrates how computational puzzles ensure the security and immutability of the blockchain by adding new blocks.
-- Proof of Stake (PoS): Introduces an alternative consensus mechanism based on validators' economic stake, reducing energy consumption and promoting decentralization.
-- SHA-256 Hashing: Utilizes the SHA-256 cryptographic hash function to generate secure and unique digital fingerprints (hashes) for each block.
+- Database Integration: Implemented a relational database using Flask-SQLAlchemy to store and manage blockchain data efficiently.
+- Data Persistence: Utilized database models and sessions to persist blockchain transactions, blocks, and validators' information between server restarts.
+- Proof of Work (PoW): Validated the integrity of blocks using SHA-256 hashing and proof of work consensus algorithm stored in the database.
+- Proof of Stake (PoS): Implemented a proof of stake algorithm using database data to select validators and create new blocks based on their economic stake in the network.
+- Signature Verification: Employed cryptographic libraries to generate and verify time-based signatures to enhance data authenticity and security between the client and server.
 - Flask Web Application: Includes a basic Flask web application to interact with the blockchain and demonstrate block mining and validation.
 
 ## Requirements
