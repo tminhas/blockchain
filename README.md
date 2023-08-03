@@ -1,4 +1,4 @@
-# Blockchain Project for Cyber-Physical Systems
+# Blockchain for Cyber-Physical Systems
 
 This is an implementation of a blockchain using Python. 
 It showcases the fundamental concepts of blockchain technology, including proof of work, proof of stake, and cryptographic hashing using SHA-256.
